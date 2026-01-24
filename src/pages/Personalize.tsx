@@ -88,6 +88,7 @@ const Personalize: React.FC = () => {
   const [amount, setAmount] = useState<number | ''>(10000);
   const [selectedDate, setSelectedDate] = useState<string>(defaultDate);
   const [sellHorizonDays, setSellHorizonDays] = useState<number>(90);
+  const [buyWindowDays, setBuyWindowDays] = useState<number>(180);
 
   const { data: historical } = useQuery<HistoricalData[] | undefined, Error>({ queryKey: ['historical', ticker], queryFn: () => fetchHistoricalData(ticker), enabled: !!ticker });
   const { data: prediction, isLoading: predLoading } = useQuery<Prediction | null, Error>({ queryKey: ['prediction', ticker, selectedDate], queryFn: async () => {
@@ -104,9 +105,15 @@ const Personalize: React.FC = () => {
     const buyCandidates = series.filter(s => s.ts <= predTs);
     if (buyCandidates.length === 0) return null;
 
-    // pick lowest price before or on prediction date
-    let bestBuy = buyCandidates[0];
-    for (const p of buyCandidates) if (p.value < bestBuy.value) bestBuy = p;
+    // pick lowest price within buy window before or on prediction date
+    const buyWindowStart = predTs - buyWindowDays * 24 * 60 * 60 * 1000;
+    let windowedBuyCandidates = buyCandidates.filter(s => s.ts >= buyWindowStart && s.ts <= predTs);
+    if (windowedBuyCandidates.length === 0) {
+      // fallback to full buyCandidates if window is empty
+      windowedBuyCandidates = buyCandidates;
+    }
+    let bestBuy = windowedBuyCandidates[0];
+    for (const p of windowedBuyCandidates) if (p.value < bestBuy.value) bestBuy = p;
 
     // look for sell opportunities after prediction within horizon
     const sellWindowEnd = predTs + sellHorizonDays * 24 * 60 * 60 * 1000;
@@ -144,7 +151,7 @@ const Personalize: React.FC = () => {
         <h1 className="text-2xl font-semibold">Personalize — Buy/Sell Suggestion</h1>
       </div>
 
-      <div className="bg-white p-6 rounded-xl border grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-white p-6 rounded-xl border grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <label className="block text-sm text-gray-600 mb-1">Stock</label>
           <select value={ticker} onChange={(e)=>setTicker(e.target.value)} className="w-full border p-2 rounded">
@@ -166,6 +173,10 @@ const Personalize: React.FC = () => {
         <div>
           <label className="block text-sm text-gray-600 mb-1">Sell horizon (days)</label>
           <input type="number" value={sellHorizonDays} onChange={(e)=> setSellHorizonDays(Math.max(1, Number(e.target.value || 1)))} min={1} className="w-full border p-2 rounded" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-600 mb-1">Buy window (days)</label>
+          <input type="number" value={buyWindowDays} onChange={(e)=> setBuyWindowDays(Math.max(1, Number(e.target.value || 1)))} min={1} className="w-full border p-2 rounded" />
         </div>
       </div>
 
