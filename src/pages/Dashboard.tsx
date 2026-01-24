@@ -7,6 +7,15 @@ import { Search, TrendingUp, Calendar, DollarSign, Star, StarOff } from 'lucide-
 
 import StockChart from '../components/StockChart';
 import PredictionCard from '../components/PredictionCard';
+import {
+  ResponsiveContainer as SmallResponsive,
+  LineChart as SmallLineChart,
+  Line as SmallLine,
+  XAxis as SmallXAxis,
+  YAxis as SmallYAxis,
+  CartesianGrid as SmallGrid,
+  Tooltip as SmallTooltip,
+} from 'recharts';
 import LoadingSpinner from '../components/LoadingSpinner';
 import {
   fetchCompanies,
@@ -241,6 +250,206 @@ const Dashboard: React.FC = () => {
     enabled: Boolean(selectedCompany && selectedDate)
   });
 
+  // Helper to get numeric price from historical entry
+  const getPrice = (d: any) => (d?.price ?? d?.close ?? d?.close_price ?? 0);
+
+  // Indicator calculations (SMA, EMA, MACD, RSI, ADX)
+  const indicators = React.useMemo(() => {
+    const data = (historicalData ?? []).map((d) => ({ ts: new Date(d.date).getTime(), price: getPrice(d) }));
+    if (!data || data.length === 0) return null;
+
+    // SMA helper
+    const sma = (period: number) => {
+      const res: { ts: number; value: number | null }[] = [];
+      for (let i = 0; i < data.length; i++) {
+        if (i < period - 1) {
+          res.push({ ts: data[i].ts, value: null });
+          continue;
+        }
+        let sum = 0;
+        for (let j = i - period + 1; j <= i; j++) sum += data[j].price;
+        res.push({ ts: data[i].ts, value: sum / period });
+      }
+      return res;
+    };
+
+    // EMA helper
+    const emaSeries = (period: number) => {
+      const res: { ts: number; value: number }[] = [];
+      const k = 2 / (period + 1);
+      let prevEma = data[0].price;
+      for (let i = 0; i < data.length; i++) {
+        const price = data[i].price;
+        const ema = i === 0 ? price : price * k + prevEma * (1 - k);
+        res.push({ ts: data[i].ts, value: ema });
+        prevEma = ema;
+      }
+      return res;
+    };
+
+    // MACD (12/26) and signal(9)
+    const ema12 = emaSeries(12).map((p) => p.value);
+    const ema26 = emaSeries(26).map((p) => p.value);
+    const macdLine = data.map((d, i) => ({ ts: d.ts, value: (ema12[i] ?? 0) - (ema26[i] ?? 0) }));
+    // signal (9) on macdLine
+    const signal: { ts: number; value: number }[] = [];
+    if (macdLine.length) {
+      let prev = macdLine[0].value;
+      const kSig = 2 / (9 + 1);
+      for (let i = 0; i < macdLine.length; i++) {
+        const v = i === 0 ? macdLine[i].value : macdLine[i].value * kSig + prev * (1 - kSig);
+        signal.push({ ts: macdLine[i].ts, value: v });
+        prev = v;
+      }
+    }
+
+    // RSI (14)
+    const rsiPeriod = 14;
+    const rsi: { ts: number; value: number | null }[] = [];
+    let gains = 0,
+      losses = 0;
+    for (let i = 0; i < data.length; i++) {
+      if (i === 0) {
+        rsi.push({ ts: data[i].ts, value: null });
+        continue;
+      }
+      const change = data[i].price - data[i - 1].price;
+      const gain = Math.max(change, 0);
+      const loss = Math.max(-change, 0);
+      if (i <= rsiPeriod) {
+        gains += gain;
+        losses += loss;
+        rsi.push({ ts: data[i].ts, value: i === rsiPeriod ? 100 - 100 / (1 + gains / losses || 1) : null });
+        if (i === rsiPeriod) {
+          // initialize smoothing
+          gains = gains / rsiPeriod;
+          losses = losses / rsiPeriod;
+        }
+        continue;
+      }
+      gains = (gains * (rsiPeriod - 1) + gain) / rsiPeriod;
+      losses = (losses * (rsiPeriod - 1) + loss) / rsiPeriod;
+      const rs = gains / (losses || 1);
+      rsi.push({ ts: data[i].ts, value: 100 - 100 / (1 + rs) });
+    }
+
+    // ADX (14) simplified
+    const adxPeriod = 14;
+    const trs: number[] = [];
+    const plusDM: number[] = [];
+    const minusDM: number[] = [];
+    for (let i = 0; i < data.length; i++) {
+      if (i === 0) {
+        trs.push(0);
+        plusDM.push(0);
+        minusDM.push(0);
+        continue;
+      }
+      const high = data[i].price; // using close as proxy
+      const low = data[i].price;
+      const prevHigh = data[i - 1].price;
+      const prevLow = data[i - 1].price;
+      const upMove = high - prevHigh;
+      const downMove = prevLow - low;
+      plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+      minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+      const tr = Math.max(Math.abs(high - prevHigh), Math.abs(low - prevLow), Math.abs(high - low));
+      trs.push(tr);
+    }
+
+    // smooth TR, +DM, -DM using Wilder's smoothing
+    const smoothTR: number[] = [];
+    const smoothPlus: number[] = [];
+    const smoothMinus: number[] = [];
+    let trSum = 0,
+      plusSum = 0,
+      minusSum = 0;
+    for (let i = 0; i < data.length; i++) {
+      if (i < adxPeriod) {
+        trSum += trs[i];
+        plusSum += plusDM[i];
+        minusSum += minusDM[i];
+        smoothTR.push(0);
+        smoothPlus.push(0);
+        smoothMinus.push(0);
+        continue;
+      }
+      if (i === adxPeriod) {
+        trSum += trs[i];
+        plusSum += plusDM[i];
+        minusSum += minusDM[i];
+        smoothTR.push(trSum);
+        smoothPlus.push(plusSum);
+        smoothMinus.push(minusSum);
+        continue;
+      }
+      const prevTR = smoothTR[smoothTR.length - 1];
+      const prevPlus = smoothPlus[smoothPlus.length - 1];
+      const prevMinus = smoothMinus[smoothMinus.length - 1];
+      const newTR = prevTR - prevTR / adxPeriod + trs[i];
+      const newPlus = prevPlus - prevPlus / adxPeriod + plusDM[i];
+      const newMinus = prevMinus - prevMinus / adxPeriod + minusDM[i];
+      smoothTR.push(newTR);
+      smoothPlus.push(newPlus);
+      smoothMinus.push(newMinus);
+    }
+
+    const plusDI: { ts: number; value: number | null }[] = [];
+    const minusDI: { ts: number; value: number | null }[] = [];
+    for (let i = 0; i < data.length; i++) {
+      const tr = smoothTR[i] || 0;
+      if (tr === 0) {
+        plusDI.push({ ts: data[i].ts, value: null });
+        minusDI.push({ ts: data[i].ts, value: null });
+        continue;
+      }
+      const pdi = (smoothPlus[i] / tr) * 100 || 0;
+      const mdi = (smoothMinus[i] / tr) * 100 || 0;
+      plusDI.push({ ts: data[i].ts, value: pdi });
+      minusDI.push({ ts: data[i].ts, value: mdi });
+    }
+
+    const dx: number[] = [];
+    for (let i = 0; i < data.length; i++) {
+      const p = plusDI[i].value ?? 0;
+      const m = minusDI[i].value ?? 0;
+      const val = (Math.abs(p - m) / ((p + m) || 1)) * 100;
+      dx.push(val);
+    }
+
+    const adx: { ts: number; value: number | null }[] = [];
+    // smooth DX
+    let adxPrev = 0;
+    for (let i = 0; i < data.length; i++) {
+      if (i < adxPeriod * 2) {
+        adx.push({ ts: data[i].ts, value: null });
+        adxPrev += dx[i] || 0;
+        continue;
+      }
+      if (i === adxPeriod * 2) {
+        adxPrev = adxPrev / adxPeriod;
+        adx.push({ ts: data[i].ts, value: adxPrev });
+        continue;
+      }
+      adxPrev = (adxPrev * (adxPeriod - 1) + dx[i]) / adxPeriod;
+      adx.push({ ts: data[i].ts, value: adxPrev });
+    }
+
+    // Prepare merged series for charts
+    const merged = data.map((d, i) => ({
+      ts: d.ts,
+      date: d.ts,
+      close: d.price,
+      sma20: sma(20)[i]?.value ?? null,
+      macd: macdLine[i]?.value ?? 0,
+      macdSignal: signal[i]?.value ?? 0,
+      rsi: rsi[i]?.value ?? null,
+      adx: adx[i]?.value ?? null,
+    }));
+
+    return { merged };
+  }, [historicalData]);
+
   // Filter companies by search term
   const filteredCompanies = React.useMemo(() => {
     if (!companies) return [];
@@ -372,6 +581,75 @@ const Dashboard: React.FC = () => {
                 prediction={prediction}
               />
             )}
+
+            {/* Technical indicators - 2x2 grid */}
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {indicators && (
+                <>
+                  <div className="bg-white p-3 rounded border">
+                    <div className="text-sm font-medium mb-2">Moving Average (SMA 20)</div>
+                    <div className="h-28">
+                      <SmallResponsive width="100%" height="100%">
+                        <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
+                          <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallYAxis hide={true} />
+                          <SmallTooltip formatter={(v:any)=>`₹${Number(v).toLocaleString('en-IN', {minimumFractionDigits:2})}`} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
+                          <SmallLine type="linear" dataKey="close" stroke="#cbd5e1" dot={false} strokeWidth={1} />
+                          <SmallLine type="linear" dataKey="sma20" stroke="#2563eb" dot={false} strokeWidth={2} />
+                        </SmallLineChart>
+                      </SmallResponsive>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border">
+                    <div className="text-sm font-medium mb-2">MACD (12,26,9)</div>
+                    <div className="h-28">
+                      <SmallResponsive width="100%" height="100%">
+                        <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
+                          <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallYAxis hide={true} />
+                          <SmallTooltip formatter={(v:any)=>Number(v).toFixed(2)} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
+                          <SmallLine type="linear" dataKey="macd" stroke="#2563eb" dot={false} strokeWidth={2} />
+                          <SmallLine type="linear" dataKey="macdSignal" stroke="#16a34a" dot={false} strokeWidth={1} />
+                        </SmallLineChart>
+                      </SmallResponsive>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border">
+                    <div className="text-sm font-medium mb-2">RSI (14)</div>
+                    <div className="h-28">
+                      <SmallResponsive width="100%" height="100%">
+                        <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
+                          <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallYAxis domain={[0,100]} />
+                          <SmallTooltip formatter={(v:any)=>Number(v).toFixed(2)} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
+                          <SmallLine type="linear" dataKey="rsi" stroke="#f59e0b" dot={false} strokeWidth={2} />
+                        </SmallLineChart>
+                      </SmallResponsive>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border">
+                    <div className="text-sm font-medium mb-2">ADX (14)</div>
+                    <div className="h-28">
+                      <SmallResponsive width="100%" height="100%">
+                        <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
+                          <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallYAxis hide={true} />
+                          <SmallTooltip formatter={(v:any)=>v ? Number(v).toFixed(2) : '—'} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
+                          <SmallLine type="linear" dataKey="adx" stroke="#7c3aed" dot={false} strokeWidth={2} />
+                        </SmallLineChart>
+                      </SmallResponsive>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Prediction */}

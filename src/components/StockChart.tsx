@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -17,6 +17,7 @@ import type { HistoricalData, Prediction } from '../types';
 interface StockChartProps {
   data: HistoricalData[];
   prediction?: Prediction | null;
+  hoverZoomDays?: number; // optional: number of days to show in hover zoom window
 }
 
 const StockChart: React.FC<StockChartProps> = ({ data, prediction }) => {
@@ -100,6 +101,24 @@ const StockChart: React.FC<StockChartProps> = ({ data, prediction }) => {
   };
 
   const predictionPoint = getPredictionPoint();
+
+  // Hover-to-zoom state: xDomain is [minTs, maxTs] or null for full view
+  const [xDomain, setXDomain] = useState<number[] | null>(null);
+
+  const handleMouseMove = useCallback((e: any) => {
+    try {
+      if (!e || !e.activeLabel) return;
+      const center = Number(e.activeLabel);
+      const days = hoverZoomDays || 14;
+      const ms = 1000 * 60 * 60 * 24;
+      const halfMs = Math.round((days * ms) / 2);
+      setXDomain([center - halfMs, center + halfMs]);
+    } catch (err) {
+      // ignore
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => setXDomain(null), []);
 
   // Build chart data using timestamps so X-axis is time-based and sorted
   const chartData = data
@@ -187,7 +206,7 @@ const StockChart: React.FC<StockChartProps> = ({ data, prediction }) => {
             <XAxis
               dataKey="date"
               type="number"
-              domain={["dataMin", "dataMax"]}
+              domain={xDomain ? xDomain : ["dataMin", "dataMax"]}
               tickFormatter={formatDate}
               stroke="#6b7280"
               fontSize={12}
@@ -301,6 +320,8 @@ const StockChart: React.FC<StockChartProps> = ({ data, prediction }) => {
             style={{ 
               color: prediction.predictedPrice >= prediction.currentPrice ? '#16a34a' : '#dc2626' 
             }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
           >
             For {prediction.day}-{prediction.month}-{prediction.year.toString().slice(-2)} (dd-mm-yy)
             {prediction.predictedPrice >= prediction.currentPrice 
