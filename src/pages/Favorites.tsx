@@ -164,26 +164,33 @@ const Favorites: React.FC = () => {
           </div>
 
           {/* Sidebar */}
-          <aside className="bg-white p-6 rounded-xl border space-y-4">
-            <h4 className="font-semibold">Your Favorites</h4>
+          <aside className="bg-white p-6 rounded-xl border self-start h-fit max-h-[70vh] overflow-y-auto">
+            <h4 className="font-semibold mb-3">Your Favorites</h4>
 
-            {favoriteCompanies.map((c) => (
-              <button
-                key={c.ticker}
-                onClick={() => setSelectedTicker((prev) => (prev === c.ticker ? '' : c.ticker))}
-                aria-pressed={selectedTicker === c.ticker}
-                className={`w-full text-left p-3 rounded-lg border ${
-                  selectedTicker === c.ticker
-                    ? 'bg-blue-50 border-blue-500'
-                    : ''
-                }`}
-              >
-                <p className="font-semibold">{c.ticker}</p>
-                <p className="text-sm text-gray-600">{c.name}</p>
-              </button>
-            ))}
-
-            {/* PredictionCard intentionally rendered in the main column above so it's not inside the favorites list */}
+            <div className="space-y-3">
+              {favoriteCompanies.length === 0 ? (
+                <p className="text-sm text-gray-500">No favorites added</p>
+              ) : (
+                favoriteCompanies.map((c) => (
+                  <button
+                    key={c.ticker}
+                    onClick={() =>
+                      setSelectedTicker((prev) =>
+                        prev === c.ticker ? '' : c.ticker
+                      )
+                    }
+                    aria-pressed={selectedTicker === c.ticker}
+                    className={`w-full text-left p-3 rounded-lg border transition ${selectedTicker === c.ticker
+                      ? 'bg-blue-50 border-blue-500'
+                      : 'hover:bg-gray-50'
+                      }`}
+                  >
+                    <p className="font-semibold">{c.ticker}</p>
+                    <p className="text-sm text-gray-600">{c.name}</p>
+                  </button>
+                ))
+              )}
+            </div>
           </aside>
         </div>
       )}

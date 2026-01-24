@@ -36,8 +36,8 @@ const Home: React.FC = () => {
   ];
 
   const stats = [
-    { value: '250+', label: 'Stocks Tracked' },
-    { value: '10+', label: 'Years of Data' },
+    { value: '140+', label: 'Stocks Tracked' },
+    { value: '5+', label: 'Years of Data' },
     { value: '99.9%', label: 'Uptime' },
     { value: '50K+', label: 'Active Users' },
   ];

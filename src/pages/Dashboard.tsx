@@ -462,6 +462,10 @@ const Dashboard: React.FC = () => {
     });
   }, [companies, searchTerm]);
 
+  // Calculate min and max dates for indicators charts
+  const minDate = indicators ? Math.min(...indicators.merged.map(d => d.date)) : 0;
+  const maxDate = indicators ? Math.max(...indicators.merged.map(d => d.date)) : 0;
+
   if (companiesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -592,7 +596,7 @@ const Dashboard: React.FC = () => {
                       <SmallResponsive width="100%" height="100%">
                         <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
                           <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallXAxis dataKey="date" type="number" domain={[minDate, maxDate]} tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
                           <SmallYAxis hide={true} />
                           <SmallTooltip formatter={(v:any)=>`₹${Number(v).toLocaleString('en-IN', {minimumFractionDigits:2})}`} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
                           <SmallLine type="linear" dataKey="close" stroke="#cbd5e1" dot={false} strokeWidth={1} />
@@ -608,7 +612,7 @@ const Dashboard: React.FC = () => {
                       <SmallResponsive width="100%" height="100%">
                         <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
                           <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallXAxis dataKey="date" type="number" domain={[minDate, maxDate]} tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
                           <SmallYAxis hide={true} />
                           <SmallTooltip formatter={(v:any)=>Number(v).toFixed(2)} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
                           <SmallLine type="linear" dataKey="macd" stroke="#2563eb" dot={false} strokeWidth={2} />
@@ -624,7 +628,7 @@ const Dashboard: React.FC = () => {
                       <SmallResponsive width="100%" height="100%">
                         <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
                           <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallXAxis dataKey="date" type="number" domain={[minDate, maxDate]} tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
                           <SmallYAxis domain={[0,100]} />
                           <SmallTooltip formatter={(v:any)=>Number(v).toFixed(2)} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
                           <SmallLine type="linear" dataKey="rsi" stroke="#f59e0b" dot={false} strokeWidth={2} />
@@ -639,7 +643,7 @@ const Dashboard: React.FC = () => {
                       <SmallResponsive width="100%" height="100%">
                         <SmallLineChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
                           <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                          <SmallXAxis dataKey="date" type="number" tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
+                          <SmallXAxis dataKey="date" type="number" domain={[minDate, maxDate]} tickFormatter={(t)=> new Date(t).toLocaleDateString('en-IN',{month:'short'})} />
                           <SmallYAxis hide={true} />
                           <SmallTooltip formatter={(v:any)=>v ? Number(v).toFixed(2) : '—'} labelFormatter={(l:any)=> new Date(l).toLocaleDateString()} />
                           <SmallLine type="linear" dataKey="adx" stroke="#7c3aed" dot={false} strokeWidth={2} />
