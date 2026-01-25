@@ -15,6 +15,8 @@ import {
   YAxis as SmallYAxis,
   CartesianGrid as SmallGrid,
   Tooltip as SmallTooltip,
+  ComposedChart,
+  Area,
 } from 'recharts';
 import LoadingSpinner from '../components/LoadingSpinner';
 import {
@@ -273,6 +275,32 @@ const Dashboard: React.FC = () => {
       return res;
     };
 
+    // Bollinger Bands (20, 2)
+    const bbPeriod = 20;
+    const bbMiddle = sma(bbPeriod);
+
+    const bbUpper: (number | null)[] = [];
+    const bbLower: (number | null)[] = [];
+
+    for (let i = 0; i < data.length; i++) {
+      if (i < bbPeriod - 1) {
+        bbUpper.push(null);
+        bbLower.push(null);
+        continue;
+      }
+
+      const slice = data.slice(i - bbPeriod + 1, i + 1).map(d => d.price);
+      const mean = bbMiddle[i]?.value ?? 0;
+
+      const variance =
+        slice.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / bbPeriod;
+
+      const stdDev = Math.sqrt(variance);
+
+      bbUpper.push(mean + 2 * stdDev);
+      bbLower.push(mean - 2 * stdDev);
+    }
+
     // EMA helper
     const emaSeries = (period: number) => {
       const res: { ts: number; value: number }[] = [];
@@ -441,6 +469,9 @@ const Dashboard: React.FC = () => {
       date: d.ts,
       close: d.price,
       sma20: sma(20)[i]?.value ?? null,
+      upper: bbUpper[i],
+      middle: bbMiddle[i]?.value ?? null,
+      lower: bbLower[i],
       macd: macdLine[i]?.value ?? 0,
       macdSignal: signal[i]?.value ?? 0,
       rsi: rsi[i]?.value ?? null,
@@ -654,6 +685,34 @@ const Dashboard: React.FC = () => {
                 </>
               )}
             </div>
+
+            {/* Bollinger Bands Chart */}
+            {indicators && (
+              <div className="mt-6 bg-white p-4 rounded-xl border">
+                <h4 className="text-sm font-semibold mb-2">
+                  Bollinger Bands (20, 2)
+                </h4>
+                <div className="h-40">
+                  <SmallResponsive width="100%" height="100%">
+                    <ComposedChart data={indicators.merged} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
+                      <SmallGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                      <SmallXAxis dataKey="date" type="number" domain={[minDate, maxDate]} tickFormatter={(t) => new Date(t).toLocaleDateString('en-IN', { month: 'short' })} />
+                      <SmallYAxis hide />
+                      <SmallTooltip formatter={(v: any) => v ? `Rs ${Number(v).toLocaleString('en-IN')}` : '—'} labelFormatter={(l: any) => new Date(l).toLocaleDateString()} />
+                      <Area type="monotone" dataKey="upper" stroke="none" fill="#fde68a" fillOpacity={0.4} />
+                      <Area type="monotone" dataKey="lower" stroke="none" fill="#ffffff" fillOpacity={1} />
+                      <SmallLine type="linear" dataKey="upper" stroke="#f59e0b" dot={false} strokeDasharray="5 5" />
+                      <SmallLine type="linear" dataKey="middle" stroke="#2563eb" dot={false} strokeWidth={2} />
+                      <SmallLine type="linear" dataKey="lower" stroke="#f59e0b" dot={false} strokeDasharray="5 5" />
+                      <SmallLine type="linear" dataKey="close" stroke="#111827" dot={false} strokeWidth={1.5} />
+                    </ComposedChart>
+                  </SmallResponsive>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Price near upper band = overbought • near lower band = oversold
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Prediction */}
