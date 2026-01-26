@@ -22,25 +22,23 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import {
   fetchCompanies,
   fetchHistoricalData,
-  fetchPrediction
+  fetchPrediction,
+  fetchCurrentPrice
 } from '../services/api';
 import type { Company, HistoricalData, Prediction } from '../types';
 
 const Dashboard: React.FC = () => {
   const { user } = useUser();
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>({
+    ticker: 'RELIANCE.NS',
+    name: 'Reliance Industries Ltd'
+  });
+  const [selectedDate, setSelectedDate] = useState<string>('2028-08-22');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState<boolean>(false);
   const calendarRef = useRef<HTMLDivElement>(null);
   const chartSectionRef = useRef<HTMLDivElement>(null);
-
-  // Month names for display
-  const monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
 
   // Get tomorrow's date as minimum
   const getMinDate = () => {
@@ -49,10 +47,9 @@ const Dashboard: React.FC = () => {
     return tomorrow.toISOString().split('T')[0];
   };
 
-  // Get max date (3 years from now)
+  // Get max date (5 years from now)
   const getMaxDate = () => {
     const maxDate = new Date();
-    // allow prediction up to 5 years from today
     maxDate.setFullYear(maxDate.getFullYear() + 5);
     return maxDate.toISOString().split('T')[0];
   };
@@ -87,9 +84,8 @@ const Dashboard: React.FC = () => {
     };
   };
 
-  // Adjust the currently selected date by days/months (cumulative on repeated clicks)
+  // Adjust the currently selected date by days/months
   const adjustSelectedDate = (addDays = 0, addMonths = 0) => {
-    // Use selectedDate as base if present, otherwise default to tomorrow
     const base = selectedDate
       ? new Date(selectedDate + 'T00:00:00')
       : (() => {
@@ -102,57 +98,6 @@ const Dashboard: React.FC = () => {
     if (addMonths) base.setMonth(base.getMonth() + addMonths);
 
     setSelectedDate(base.toISOString().split('T')[0]);
-  };
-
-  // Generate calendar days for the popup calendar
-  const generateCalendarDays = () => {
-    if (!selectedDate) return [];
-    
-    const currentDate = new Date(selectedDate + 'T00:00:00');
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDay = firstDay.getDay();
-    
-    const days: { date: number; isCurrentMonth: boolean; isToday: boolean; isPast: boolean; isTomorrow: boolean }[] = [];
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    for (let i = 0; i < startingDay; i++) {
-      days.push({ date: 0, isCurrentMonth: false, isToday: false, isPast: false, isTomorrow: false });
-    }
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateObj = new Date(year, month, day);
-      const dateStr = dateObj.toISOString().split('T')[0];
-      days.push({
-        date: day,
-        isCurrentMonth: true,
-        isToday: dateStr === today.toISOString().split('T')[0],
-        isPast: dateObj < today,
-        isTomorrow: dateStr === tomorrow.toISOString().split('T')[0]
-      });
-    }
-    
-    return days;
-  };
-
-  // Handle date selection
-  const handleDateSelect = (day: number) => {
-    if (!selectedDate) return;
-    const date = new Date(selectedDate + 'T00:00:00');
-    date.setDate(day);
-    const minDate = new Date(getMinDate());
-    if (date < minDate) return;
-    
-    setSelectedDate(date.toISOString().split('T')[0]);
-    setShowCalendar(false);
   };
 
   // Close calendar when clicking outside
@@ -252,6 +197,21 @@ const Dashboard: React.FC = () => {
     enabled: Boolean(selectedCompany && selectedDate)
   });
 
+  // 4. Fetch current price separately for more reliable updates
+  const {
+    data: currentPriceData,
+    isLoading: quoteLoading,
+    error: quoteError
+  } = useQuery<{ currentPrice: number; previousClose?: number; change?: number; changePercent?: number } | null, Error>({
+    queryKey: ['quote', selectedCompany?.ticker],
+    queryFn: () =>
+      selectedCompany
+        ? fetchCurrentPrice(selectedCompany.ticker)
+        : Promise.resolve(null),
+    enabled: Boolean(selectedCompany),
+    refetchInterval: 60000, // Refresh every minute
+  });
+
   // Helper to get numeric price from historical entry
   const getPrice = (d: any) => (d?.price ?? d?.close ?? d?.close_price ?? 0);
 
@@ -349,7 +309,6 @@ const Dashboard: React.FC = () => {
         losses += loss;
         rsi.push({ ts: data[i].ts, value: i === rsiPeriod ? 100 - 100 / (1 + gains / losses || 1) : null });
         if (i === rsiPeriod) {
-          // initialize smoothing
           gains = gains / rsiPeriod;
           losses = losses / rsiPeriod;
         }
@@ -373,7 +332,7 @@ const Dashboard: React.FC = () => {
         minusDM.push(0);
         continue;
       }
-      const high = data[i].price; // using close as proxy
+      const high = data[i].price;
       const low = data[i].price;
       const prevHigh = data[i - 1].price;
       const prevLow = data[i - 1].price;
@@ -446,7 +405,6 @@ const Dashboard: React.FC = () => {
     }
 
     const adx: { ts: number; value: number | null }[] = [];
-    // smooth DX
     let adxPrev = 0;
     for (let i = 0; i < data.length; i++) {
       if (i < adxPeriod * 2) {
@@ -496,6 +454,16 @@ const Dashboard: React.FC = () => {
   // Calculate min and max dates for indicators charts
   const minDate = indicators ? Math.min(...indicators.merged.map(d => d.date)) : 0;
   const maxDate = indicators ? Math.max(...indicators.merged.map(d => d.date)) : 0;
+
+  // Create a merged prediction object that uses currentPriceData for the current price
+  const mergedPrediction = React.useMemo(() => {
+    if (!prediction) return null;
+    return {
+      ...prediction,
+      // Use the separately fetched current price if available, otherwise fall back to prediction's currentPrice
+      currentPrice: currentPriceData?.currentPrice ?? prediction.currentPrice
+    };
+  }, [prediction, currentPriceData]);
 
   if (companiesLoading) {
     return (
@@ -613,7 +581,7 @@ const Dashboard: React.FC = () => {
             ) : (
               <StockChart
                 data={historicalData ?? []}
-                prediction={prediction}
+                prediction={mergedPrediction}
               />
             )}
 
@@ -775,7 +743,7 @@ const Dashboard: React.FC = () => {
               year={year}
               month={month}
               day={day}
-              prediction={prediction}
+              prediction={mergedPrediction}
               isLoading={predLoading}
               error={predError}
             />
@@ -794,3 +762,4 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+

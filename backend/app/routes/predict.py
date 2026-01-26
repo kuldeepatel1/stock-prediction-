@@ -52,16 +52,54 @@ async def predict_price(
         future_trading_days = int(days_from_now * 252 / 365)
 
         # Fetch current price using Yahoo Finance first
+        current_price = None
+        fetch_ticker = ticker if ticker.endswith('.NS') else ticker + '.NS'
+        
         try:
-            data = yf.download(ticker, period="1d", progress=False)
-            if data.empty:
-                # Try with .NS suffix if not already present
-                if not ticker.endswith('.NS'):
-                    data = yf.download(ticker + '.NS', period="1d", progress=False)
-            current_price = float(data["Close"].iloc[-1]) if not data.empty else 1500.0
-        except Exception as e:
-            logging.warning(f"Failed to fetch current price for {ticker}: {e}")
-            current_price = 1500.0  # Fallback price
+            # Method 1: Try yf.Ticker() first (more reliable)
+            stock = yf.Ticker(fetch_ticker)
+            # Get fast info for current price
+            try:
+                current_price = float(stock.fast_info.last_price)
+            except (AttributeError, KeyError):
+                # Fallback to history
+                hist = stock.history(period="5d")
+                if not hist.empty:
+                    current_price = float(hist["Close"].iloc[-1])
+                else:
+                    raise ValueError("No history data")
+        except Exception as ticker_err:
+            logging.warning(f"Ticker method failed for {ticker}: {ticker_err}")
+            
+            # Method 2: Try yf.download directly
+            try:
+                data = yf.download(fetch_ticker, period="5d", progress=False)
+                if not data.empty:
+                    current_price = float(data["Close"].iloc[-1])
+                else:
+                    # Method 3: Try without .NS suffix
+                    data = yf.download(ticker, period="5d", progress=False)
+                    if not data.empty:
+                        current_price = float(data["Close"].iloc[-1])
+                    else:
+                        raise ValueError("No data from yfinance")
+            except Exception as download_err:
+                logging.error(f"Download method failed for {ticker}: {download_err}")
+                # Try one more time with longer period
+                try:
+                    hist = yf.Ticker(fetch_ticker).history(period="1mo")
+                    if not hist.empty:
+                        current_price = float(hist["Close"].iloc[-1])
+                except Exception:
+                    pass
+
+        # If still no price, raise an error
+        if current_price is None:
+            logging.error(f"Failed to fetch current price for {ticker} after all methods")
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Unable to fetch current price for {ticker}. Please check the ticker symbol and try again."
+            )
 
         models = request.app.state.models
 
@@ -128,10 +166,20 @@ async def predict_price(
         logging.exception("Prediction failed")
         # Return a fallback prediction instead of error
         try:
-            data = yf.download(ticker, period="1d", progress=False)
-            current_price = float(data["Close"].iloc[-1]) if not data.empty else 1500.0
+            fetch_ticker = ticker if ticker.endswith('.NS') else ticker + '.NS'
+            data = yf.download(fetch_ticker, period="5d", progress=False)
+            if data.empty:
+                data = yf.download(ticker, period="5d", progress=False)
+            current_price = float(data["Close"].iloc[-1]) if not data.empty else None
         except:
-            current_price = 1500.0
+            current_price = None
+        
+        if current_price is None:
+            # If we still can't get the price, re-raise the error
+            raise HTTPException(
+                status_code=503,
+                detail=f"Unable to fetch current price for {ticker}. Please try again later."
+            )
         
         # Simple fallback prediction
         try:
@@ -213,3 +261,4 @@ async def train_single_ticker(request: Request, ticker: str = Query(..., descrip
     except Exception as e:
         logging.exception('Training failed')
         raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+

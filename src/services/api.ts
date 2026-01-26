@@ -153,15 +153,59 @@ export const fetchHistoricalData = (
   );
 
 /**
+ * Fetch current stock price for a given ticker
+ */
+export const fetchCurrentPrice = async (
+  ticker: string
+): Promise<{ currentPrice: number; previousClose?: number; change?: number; changePercent?: number } | null> => {
+  if (API_BASE_URL) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/quote?ticker=${encodeURIComponent(ticker)}`);
+      if (!res.ok) {
+        console.error(`Quote API error (${res.status}): ${res.statusText}`);
+        return null;
+      }
+      return res.json();
+    } catch (error) {
+      console.error(`Failed to fetch quote for ${ticker}:`, error);
+      return null;
+    }
+  } else {
+    // Mock mode - return simulated current price based on last historical price
+    const historical = generateHistoricalData(ticker);
+    const lastPrice = historical[historical.length - 1]?.price || 1000;
+    // Add small random variation to simulate real-time changes
+    const variation = (Math.random() - 0.5) * 0.02 * lastPrice;
+    return {
+      currentPrice: Number((lastPrice + variation).toFixed(2)),
+      previousClose: lastPrice,
+      change: Number(variation.toFixed(2)),
+      changePercent: Number(((variation / lastPrice) * 100).toFixed(2))
+    };
+  }
+};
+
+/**
  * Fetch a predicted price for `ticker` in `year`, `month`, and `day`
  */
-export const fetchPrediction = (
+export const fetchPrediction = async (
   ticker: string,
   year: number,
   month: number,
   day: number
-): Promise<Prediction> =>
-  callOrMock(
-    `/api/predict?ticker=${encodeURIComponent(ticker)}&year=${year}&month=${month}&day=${day}`,
-    () => generatePrediction(ticker, year, month, day, generateHistoricalData(ticker))
-  );
+): Promise<Prediction> => {
+  if (API_BASE_URL) {
+    const res = await fetch(
+      `${API_BASE_URL}/api/predict?ticker=${encodeURIComponent(ticker)}&year=${year}&month=${month}&day=${day}`
+    );
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || `API error (${res.status}): ${res.statusText}`);
+    }
+    return res.json();
+  } else {
+    // Mock mode
+    return generatePrediction(ticker, year, month, day, generateHistoricalData(ticker));
+  }
+};
+

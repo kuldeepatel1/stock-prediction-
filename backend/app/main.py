@@ -105,6 +105,83 @@ def get_historical(ticker: str):
 
 
 # --------------------------------------
+# API: Get Current Stock Price (Quote)
+# --------------------------------------
+@app.get("/api/quote")
+def get_quote(ticker: str):
+    """
+    Fetch current stock price for a given ticker.
+    Supports NSE stocks (with or without .NS suffix).
+    """
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Ticker symbol is required")
+    
+    # Ensure ticker has .NS suffix for NSE stocks
+    fetch_ticker = ticker if ticker.endswith('.NS') else ticker + '.NS'
+    
+    current_price = None
+    previous_close = None
+    change = None
+    change_percent = None
+    
+    try:
+        # Method 1: Try yf.Ticker() with fast_info
+        stock = yf.Ticker(fetch_ticker)
+        
+        try:
+            current_price = float(stock.fast_info.last_price)
+            previous_close = float(stock.fast_info.previous_close)
+        except (AttributeError, KeyError, TypeError):
+            # Method 2: Fallback to history
+            hist = stock.history(period="5d")
+            if not hist.empty:
+                current_price = float(hist["Close"].iloc[-1])
+                if len(hist) > 1:
+                    previous_close = float(hist["Close"].iloc[-2])
+            
+        if current_price is None:
+            # Method 3: Try yf.download
+            data = yf.download(fetch_ticker, period="5d", progress=False)
+            if not data.empty:
+                current_price = float(data["Close"].iloc[-1])
+                if len(data) > 1:
+                    previous_close = float(data["Close"].iloc[-2])
+            else:
+                # Try without .NS suffix
+                data = yf.download(ticker, period="5d", progress=False)
+                if not data.empty:
+                    current_price = float(data["Close"].iloc[-1])
+                    if len(data) > 1:
+                        previous_close = float(data["Close"].iloc[-2])
+        
+        # Calculate change
+        if current_price is not None and previous_close is not None:
+            change = round(current_price - previous_close, 2)
+            change_percent = round((change / previous_close) * 100, 2)
+        
+        if current_price is None:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Unable to fetch quote for {ticker}. Please check the ticker symbol."
+            )
+        
+        return {
+            "ticker": ticker,
+            "currentPrice": current_price,
+            "previousClose": previous_close,
+            "change": change,
+            "changePercent": change_percent,
+            "currency": "INR",
+            "exchange": "NSE" if fetch_ticker.endswith('.NS') else "Unknown"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching quote: {str(e)}")
+
+
+# --------------------------------------
 # API: Legacy Simple Prediction (optional fallback)
 # --------------------------------------
 @app.get("/api/predict-simple", response_model=PredictionResponse)
@@ -141,3 +218,4 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
+
