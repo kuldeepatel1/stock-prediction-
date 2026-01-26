@@ -10,7 +10,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 // Lazy load the Dashboard
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Favorites = lazy(() => import('./pages/Favorites'));
-const Wallet = lazy(() => import('./pages/Wallet'));
 const Compare = lazy(() => import('./pages/Compare'));
 const Recognize = lazy(() => import('./pages/Recognize'));
 const Personalize = lazy(() => import('./pages/Personalize'));
@@ -113,18 +112,6 @@ function App() {
                   <Suspense fallback={<PageLoader />}>
                     <AnimatedPage>
                       <Favorites />
-                    </AnimatedPage>
-                  </Suspense>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/wallet"
-              element={
-                <ProtectedRoute>
-                  <Suspense fallback={<PageLoader />}>
-                    <AnimatedPage>
-                      <Wallet />
                     </AnimatedPage>
                   </Suspense>
                 </ProtectedRoute>
