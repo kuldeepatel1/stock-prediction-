@@ -26,3 +26,11 @@ export interface User {
   lastName?: string;
   image_url?: string;
 }
+
+export interface WalletStock {
+  ticker: string;
+  name: string;
+  quantity: number;
+  buyPrice: number;
+  buyDate: string;
+}

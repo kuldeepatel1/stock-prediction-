@@ -118,7 +118,7 @@ async def predict_price(
             "day": day,
             "predictedPrice": round(predicted_price, 2),
             "currentPrice": round(current_price, 2),
-            "confidence": 85,
+            "confidence": 90,
             "createdAt": datetime.utcnow().isoformat()
         }
 
