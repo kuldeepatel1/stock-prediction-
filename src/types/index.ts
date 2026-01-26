@@ -34,3 +34,11 @@ export interface WalletStock {
   buyPrice: number;
   buyDate: string;
 }
+
+// export interface StockMetrics {
+//   ticker: string;
+//   netProfitGrowth: number;        // Percentage growth in net profit (QoQ)
+//   shareholderReturn: number;      // 3-year return to shareholders
+//   revenueCAGR: number;            // Compounded Annual Growth Rate of revenue
+//   lastUpdated: string;
+// }

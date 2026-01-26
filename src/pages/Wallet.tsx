@@ -10,7 +10,9 @@ import {
   DollarSign,
   Briefcase,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ArrowDownLeft,
+  Tag
 } from 'lucide-react';
 
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -370,8 +372,8 @@ const WalletPage: React.FC = () => {
               disabled={!selectedTicker || !quantity || !buyPrice || quantity <= 0 || buyPrice <= 0}
               className="w-full bg-gradient-to-r from-primary-600 to-accent-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-primary-500 hover:to-accent-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              <Plus className="h-5 w-5 mr-2" />
-              Add to Portfolio
+              <ArrowDownLeft className="h-5 w-5 mr-2" />
+              Stock Buy
             </button>
           </div>
         </div>
@@ -441,15 +443,27 @@ const WalletPage: React.FC = () => {
                           {isProfit ? '+' : ''}{profitLossPercent.toFixed(2)}%
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => removeFromPortfolio(stock.ticker)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Remove from portfolio"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
-                      </td>
+                   <td className="px-6 py-4 text-center">
+  <button
+    onClick={() => removeFromPortfolio(stock.ticker)}
+    className="
+      inline-flex items-center justify-center
+      px-4 py-1.5
+      text-sm font-semibold
+      text-red-600
+      border border-red-300
+      rounded-md
+      hover:bg-red-50 hover:border-red-400
+      transition-all
+      whitespace-nowrap
+    "
+    title="Sell Stock"
+  >
+    Sell
+  </button>
+</td>
+
+
                     </tr>
                   );
                 })}
