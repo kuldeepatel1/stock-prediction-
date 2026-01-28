@@ -11,9 +11,10 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL),
     },
     server: {
+      port: 5173,
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL,
+          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
           changeOrigin: true,
           secure: false,
         },

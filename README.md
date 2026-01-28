@@ -153,12 +153,35 @@ backend/
 
 ### Docker
 
-```bash
-# Build the Docker image
-docker build -t stock-prediction-app .
+The easiest way to run the entire project (frontend + backend) with a single command:
 
-# Run the container
-docker run -p 80:80 stock-prediction-app
+```bash
+# Start both services
+docker-compose up
+
+# Build and start (first time or after changes)
+docker-compose up --build
+
+# Stop services
+docker-compose down
+```
+
+This will start:
+- **Frontend**: http://localhost:5173 (Vite dev server with hot-reload)
+- **Backend**: http://localhost:8000 (FastAPI with uvicorn reload)
+
+Both services support hot-reload - changes to source files are automatically detected and reflected.
+
+**Manual Docker Run:**
+
+```bash
+# Backend only
+docker build -t stock-prediction-backend ./backend
+docker run -p 8000:8000 -v ./backend:/app stock-prediction-backend
+
+# Frontend only  
+docker build -t stock-prediction-frontend -f frontend/Dockerfile.dev .
+docker run -p 5173:5173 -v .:/app -v /app/node_modules stock-prediction-frontend
 ```
 
 ### Manual Build
